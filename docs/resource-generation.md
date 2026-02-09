@@ -17,6 +17,8 @@ Generated modules are written to:
 ## Naming and namespace policy
 
 - Resource name format: `{domain}_{source}_{layer}_{asset}`
+- Generated Databricks resource display names append target suffix:
+  - `<resource_name>_${bundle.target}`
 - Namespace mapping is enforced in generated payloads:
   - `catalog = domain`
   - `schema = source`

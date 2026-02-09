@@ -38,6 +38,10 @@ def _merge_tags(
     return merged
 
 
+def _with_bundle_target_suffix(base_name: str) -> str:
+    return f"{base_name}_${{bundle.target}}"
+
+
 def _validate_reserved_parameters(parameters: list[dict[str, Any]]) -> None:
     for parameter in parameters:
         if not isinstance(parameter, dict):
@@ -51,7 +55,7 @@ def build_job_resource_dict(spec: JobSpec) -> dict[str, Any]:
     _validate_reserved_parameters(spec.parameters)
 
     resource: dict[str, Any] = {
-        "name": spec.resource_name,
+        "name": _with_bundle_target_suffix(spec.resource_name),
         "parameters": [
             {"name": "catalog", "default": spec.domain},
             {"name": "schema", "default": spec.source},
@@ -183,7 +187,7 @@ def build_pipeline_resource_dict(spec: PipelineSpec) -> dict[str, Any]:
             layer_path=layer_path,
             allowed_library_root=allowed_library_root,
         ),
-        "name": spec.resource_name,
+        "name": _with_bundle_target_suffix(spec.resource_name),
         "root_path": root_path,
         "schema": spec.source,
         "serverless": spec.serverless,

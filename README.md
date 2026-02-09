@@ -25,6 +25,8 @@ Databricks Asset Bundle monorepo using Python-defined resources with strict gene
 ## Policies
 
 - Naming: `{domain}_{source}_{layer}_{asset}`
+- Generated Databricks resource names include env suffix:
+  - `<resource_name>_${bundle.target}`
 - Namespace mapping:
   - `catalog = domain`
   - `schema = source`
