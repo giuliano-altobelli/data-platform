@@ -1,0 +1,14 @@
+domain: template_domain
+source: template_source
+layer: staging
+asset: basic_continuous
+continuous: true
+development: true
+serverless: true
+channel: CURRENT
+configuration:
+  pipeline_mode: continuous
+  source_system: template_source
+libraries:
+  - glob:
+      include: src/template_domain/template_source/staging/**

@@ -1,0 +1,80 @@
+name: quality-and-deploy
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: uv sync --dev
+      - name: Ruff format check
+        run: uv run ruff format --check .
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Pyrefly type check
+        run: uv run pyrefly check --summarize-errors
+
+  detect-scope:
+    runs-on: ubuntu-latest
+    needs: quality
+    outputs:
+      full_deploy: ${{ steps.scope.outputs.full_deploy }}
+      has_scopes: ${{ steps.scope.outputs.has_scopes }}
+      scopes: ${{ steps.scope.outputs.scopes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: scope
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+
+          python scripts/detect_deployment_scope.py \
+            --base "${BASE_SHA}" \
+            --head "${HEAD_SHA}" \
+            --github-output "${GITHUB_OUTPUT}"
+
+  deploy-full:
+    runs-on: ubuntu-latest
+    needs: detect-scope
+    if: ${{ needs.detect-scope.outputs.full_deploy == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Deploy full bundle
+        run: databricks bundle deploy --target dev
+
+  deploy-scoped:
+    runs-on: ubuntu-latest
+    needs: detect-scope
+    if: ${{ needs.detect-scope.outputs.full_deploy != 'true' && needs.detect-scope.outputs.has_scopes == 'true' }}
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.detect-scope.outputs.scopes) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Deploy scoped bundle
+        env:
+          DEPLOY_DOMAIN: ${{ matrix.domain }}
+          DEPLOY_SOURCE: ${{ matrix.source }}
+        run: |
+          echo "Deploying ${DEPLOY_DOMAIN}/${DEPLOY_SOURCE}"
+          databricks bundle deploy --target dev

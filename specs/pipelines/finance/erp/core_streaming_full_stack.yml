@@ -1,0 +1,12 @@
+domain: finance
+source: erp
+layer: full
+asset: core_streaming
+pipeline_kind: full_stack
+continuous: true
+development: true
+serverless: true
+channel: CURRENT
+configuration:
+  finance_erp_input_path: /Volumes/finance/erp/raw/transactions
+  finance_erp_schema_location: /Volumes/finance/erp/checkpoints/autoloader_schema

@@ -1,0 +1,1 @@
+"""Generated resource module utilities."""
