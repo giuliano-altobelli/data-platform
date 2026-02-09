@@ -5,8 +5,9 @@ import json
 import re
 import subprocess
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 GLOBAL_PATH_PREFIXES = (
     ".github/workflows/",
@@ -29,16 +30,22 @@ SCOPE_PATTERNS = (
 PLACEHOLDER_COMPONENTS = {"template_domain", "template_source"}
 
 
-@dataclass(frozen=True, order=True)
-class Scope:
+class Scope(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
     domain: str
     source: str
 
 
-@dataclass(frozen=True)
-class ScopeDetectionResult:
+class ScopeDetectionResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
     full_deploy: bool
     scopes: tuple[Scope, ...]
+
+
+def _sort_scopes(scopes: Iterable[Scope]) -> tuple[Scope, ...]:
+    return tuple(sorted(scopes, key=lambda scope: (scope.domain, scope.source)))
 
 
 def _normalize_path(path: str) -> str:
@@ -73,8 +80,8 @@ def _extract_scope(path: str) -> Scope | None:
     return None
 
 
-def discover_all_scopes(repo_root: Path) -> set[Scope]:
-    scopes: set[Scope] = set()
+def discover_all_scopes(repo_root: Path) -> tuple[Scope, ...]:
+    scope_map: dict[tuple[str, str], Scope] = {}
 
     for base_dir_name in ("resources", "src"):
         base_dir = repo_root / base_dir_name
@@ -89,9 +96,10 @@ def discover_all_scopes(repo_root: Path) -> set[Scope]:
                 if not source_dir.is_dir() or _is_placeholder_component(source_dir.name):
                     continue
 
-                scopes.add(Scope(domain=domain_dir.name, source=source_dir.name))
+                scope = Scope(domain=domain_dir.name, source=source_dir.name)
+                scope_map[(scope.domain, scope.source)] = scope
 
-    return scopes
+    return _sort_scopes(scope_map.values())
 
 
 def detect_scope_from_paths(changed_paths: Iterable[str], repo_root: Path) -> ScopeDetectionResult:
@@ -100,14 +108,17 @@ def detect_scope_from_paths(changed_paths: Iterable[str], repo_root: Path) -> Sc
         return ScopeDetectionResult(full_deploy=False, scopes=tuple())
 
     if any(is_global_change(path) for path in normalized_paths):
-        scopes = tuple(sorted(discover_all_scopes(repo_root)))
+        scopes = discover_all_scopes(repo_root)
         return ScopeDetectionResult(full_deploy=True, scopes=scopes)
 
-    impacted_scopes = {
-        scope for path in normalized_paths if (scope := _extract_scope(path)) is not None
-    }
+    impacted_scope_map: dict[tuple[str, str], Scope] = {}
+    for path in normalized_paths:
+        scope = _extract_scope(path)
+        if scope is None:
+            continue
+        impacted_scope_map[(scope.domain, scope.source)] = scope
 
-    return ScopeDetectionResult(full_deploy=False, scopes=tuple(sorted(impacted_scopes)))
+    return ScopeDetectionResult(full_deploy=False, scopes=_sort_scopes(impacted_scope_map.values()))
 
 
 def _git_diff_files(base: str, head: str) -> list[str]:
@@ -121,7 +132,7 @@ def _git_diff_files(base: str, head: str) -> list[str]:
 
 
 def _write_github_output(path: Path, result: ScopeDetectionResult) -> None:
-    scopes_payload = json.dumps([scope.__dict__ for scope in result.scopes])
+    scopes_payload = json.dumps([scope.model_dump() for scope in result.scopes])
     with path.open("a", encoding="utf-8") as handle:
         handle.write(f"full_deploy={'true' if result.full_deploy else 'false'}\n")
         handle.write(f"has_scopes={'true' if bool(result.scopes) else 'false'}\n")
@@ -146,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     result = detect_scope_from_paths(changed_files, repo_root)
     payload = {
         "full_deploy": result.full_deploy,
-        "scopes": [scope.__dict__ for scope in result.scopes],
+        "scopes": [scope.model_dump() for scope in result.scopes],
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
 

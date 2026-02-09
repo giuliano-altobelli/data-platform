@@ -98,3 +98,20 @@ def test_pipeline_mapping_enforces_catalog_schema_and_layer_paths(tmp_path: Path
     payload = build_pipeline_resource_dict(spec)
     assert payload["catalog"] == "finance"
     assert payload["schema"] == "erp"
+
+
+def test_continuous_pipeline_spec_sets_continuous_flag() -> None:
+    spec = PipelineSpec(
+        domain="template_domain",
+        source="template_source",
+        layer="staging",
+        asset="basic_continuous",
+        continuous=True,
+        development=True,
+        libraries=[{"glob": {"include": "src/template_domain/template_source/staging/**"}}],
+    )
+
+    payload = build_pipeline_resource_dict(spec)
+    assert payload["continuous"] is True
+    assert payload["development"] is True
+    assert payload["root_path"] == "src/template_domain/template_source/staging"

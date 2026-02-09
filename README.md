@@ -39,3 +39,8 @@ Databricks Asset Bundle monorepo using Python-defined resources with strict gene
 
 - `docs/resource-generation.md`
 - `docs/deployment-scope.md`
+
+## Starter continuous pipeline
+
+- Spec: `specs/pipelines/template_domain/template_source/basic_continuous.yml`
+- Generate: `just build-pipeline-resource spec=specs/pipelines/template_domain/template_source/basic_continuous.yml`

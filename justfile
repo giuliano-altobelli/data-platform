@@ -1,10 +1,10 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
 build-job-resource spec:
-    uv run python scripts/generate_resource.py --kind job --spec {{spec}}
+    spec_path="{{spec}}"; spec_path="${spec_path#spec=}"; uv run python scripts/generate_resource.py --kind job --spec "$spec_path"
 
 build-pipeline-resource spec:
-    uv run python scripts/generate_resource.py --kind pipeline --spec {{spec}}
+    spec_path="{{spec}}"; spec_path="${spec_path#spec=}"; uv run python scripts/generate_resource.py --kind pipeline --spec "$spec_path"
 
 format:
     uv run ruff format .

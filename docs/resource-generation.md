@@ -71,3 +71,13 @@ libraries:
 ```
 
 Any unknown field fails validation (`extra = forbid`).
+
+## Template continuous pipeline
+
+A starter continuous pipeline spec is available at:
+
+- `specs/pipelines/template_domain/template_source/basic_continuous.yml`
+
+Generate it with:
+
+- `just build-pipeline-resource spec=specs/pipelines/template_domain/template_source/basic_continuous.yml`

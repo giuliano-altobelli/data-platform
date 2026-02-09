@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Databricks Pipeline"
+  short_description: "Generate and validate Databricks pipeline assets"
+  default_prompt: "Use $build-databricks-pipeline to create or update a Databricks pipeline spec and generated resource in this repository."
