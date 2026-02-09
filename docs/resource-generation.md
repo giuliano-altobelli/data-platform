@@ -51,6 +51,7 @@ domain: finance
 source: erp
 layer: staging
 asset: customer_360
+pipeline_kind: single_layer
 
 # Optional
 continuous: false
@@ -62,12 +63,30 @@ libraries:
       include: src/finance/erp/staging/**
 ```
 
-If `libraries` is omitted, generation defaults to:
+`pipeline_kind` controls root and library defaults:
+
+- `single_layer` (default):
+  - `layer` must be `raw|base|staging|final`
+  - `root_path` is `src/<domain>/<source>/<layer>`
+  - default libraries:
 
 ```yaml
 libraries:
   - glob:
       include: src/<domain>/<source>/<layer>/**
+```
+
+- `full_stack`:
+  - `layer` must be `full`
+  - `root_path` is `src/<domain>/<source>`
+  - default libraries:
+
+```yaml
+libraries:
+  - glob: { include: src/<domain>/<source>/raw/** }
+  - glob: { include: src/<domain>/<source>/base/** }
+  - glob: { include: src/<domain>/<source>/staging/** }
+  - glob: { include: src/<domain>/<source>/final/** }
 ```
 
 Any unknown field fails validation (`extra = forbid`).
@@ -81,3 +100,22 @@ A starter continuous pipeline spec is available at:
 Generate it with:
 
 - `just build-pipeline-resource spec=specs/pipelines/template_domain/template_source/basic_continuous.yml`
+
+## Full-stack DLT streaming example
+
+A tightly-coupled raw/base/staging/final streaming example is available at:
+
+- `specs/pipelines/finance/erp/core_streaming_full_stack.yml`
+
+Generate it with:
+
+- `just build-pipeline-resource spec=specs/pipelines/finance/erp/core_streaming_full_stack.yml`
+
+The generated module is:
+
+- `resources/finance/erp/pipelines/finance_erp_full_core_streaming.py`
+
+For this example, validate and deploy against dev target:
+
+- `databricks bundle validate -t dev`
+- `databricks bundle deploy -t dev`

@@ -11,7 +11,7 @@ from resources._generated.generator import (
     build_pipeline_resource,
     build_pipeline_resource_dict,
 )
-from resources._models.specs import PipelineSpec
+from resources._models.specs import JobSpec, PipelineSpec
 
 
 def _write_yaml(path: Path, payload: dict[str, object]) -> None:
@@ -70,6 +70,22 @@ def test_invalid_spec_rejects_unknown_keys(tmp_path: Path) -> None:
         build_job_resource(spec_path, resource_root=tmp_path / "resources")
 
 
+def test_job_spec_rejects_full_layer() -> None:
+    with pytest.raises(ValidationError):
+        JobSpec(
+            domain="finance",
+            source="erp",
+            layer="full",
+            asset="invalid_job_layer",
+            tasks=[
+                {
+                    "task_key": "a",
+                    "notebook_task": {"notebook_path": "src/finance/erp/raw/a.ipynb"},
+                }
+            ],
+        )
+
+
 def test_pipeline_mapping_enforces_catalog_schema_and_layer_paths(tmp_path: Path) -> None:
     spec_path = tmp_path / "pipeline.yml"
     _write_yaml(
@@ -115,3 +131,61 @@ def test_continuous_pipeline_spec_sets_continuous_flag() -> None:
     assert payload["continuous"] is True
     assert payload["development"] is True
     assert payload["root_path"] == "src/template_domain/template_source/staging"
+
+
+def test_full_stack_pipeline_sets_source_root_and_layered_libraries() -> None:
+    spec = PipelineSpec(
+        domain="finance",
+        source="erp",
+        layer="full",
+        asset="core_streaming",
+        pipeline_kind="full_stack",
+    )
+
+    payload = build_pipeline_resource_dict(spec)
+    assert payload["catalog"] == "finance"
+    assert payload["schema"] == "erp"
+    assert payload["name"] == "finance_erp_full_core_streaming"
+    assert payload["root_path"] == "src/finance/erp"
+    assert payload["libraries"] == [
+        {"glob": {"include": "src/finance/erp/raw/**"}},
+        {"glob": {"include": "src/finance/erp/base/**"}},
+        {"glob": {"include": "src/finance/erp/staging/**"}},
+        {"glob": {"include": "src/finance/erp/final/**"}},
+    ]
+
+
+def test_full_stack_requires_full_layer() -> None:
+    with pytest.raises(ValidationError):
+        PipelineSpec(
+            domain="finance",
+            source="erp",
+            layer="staging",
+            asset="core_streaming",
+            pipeline_kind="full_stack",
+        )
+
+
+def test_single_layer_rejects_full_layer_without_full_stack_kind() -> None:
+    with pytest.raises(ValidationError):
+        PipelineSpec(
+            domain="finance",
+            source="erp",
+            layer="full",
+            asset="core_streaming",
+            pipeline_kind="single_layer",
+        )
+
+
+def test_full_stack_library_path_must_stay_under_source_root() -> None:
+    spec = PipelineSpec(
+        domain="finance",
+        source="erp",
+        layer="full",
+        asset="core_streaming",
+        pipeline_kind="full_stack",
+        libraries=[{"glob": {"include": "src/finance/crm/staging/**"}}],
+    )
+
+    with pytest.raises(ValueError):
+        build_pipeline_resource_dict(spec)

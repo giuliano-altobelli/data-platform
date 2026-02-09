@@ -11,7 +11,7 @@ Build a Databricks pipeline by producing a valid spec, generating the Python res
 
 1. Confirm the pipeline inputs.
 Required inputs: `domain`, `source`, `layer`, `asset`.
-Optional inputs: `continuous`, `development`, `serverless`, `channel`, `configuration` key-values.
+Optional inputs: `pipeline_kind`, `continuous`, `development`, `serverless`, `channel`, `configuration` key-values.
 
 2. Create or update the pipeline spec.
 Write specs to `specs/pipelines/<domain>/<source>/` and keep names in lowercase snake_case.
@@ -53,6 +53,19 @@ python skills/build-databricks-pipeline/scripts/create_pipeline_spec.py \
   --source erp \
   --layer staging \
   --asset customer_360 \
+  --continuous \
+  --development \
+  --build
+```
+
+- Create/update a tightly-coupled full-stack DLT spec:
+```bash
+python skills/build-databricks-pipeline/scripts/create_pipeline_spec.py \
+  --domain finance \
+  --source erp \
+  --layer full \
+  --asset core_streaming \
+  --pipeline-kind full_stack \
   --continuous \
   --development \
   --build

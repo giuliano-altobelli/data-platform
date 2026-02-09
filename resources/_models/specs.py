@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-Layer = Literal["raw", "base", "staging", "final"]
+Layer = Literal["raw", "base", "staging", "final", "full"]
+PipelineKind = Literal["single_layer", "full_stack"]
 NAME_PATTERN = r"^[a-z][a-z0-9_]*$"
 
 
@@ -43,8 +44,15 @@ class JobSpec(ResourceSpecBase):
     tasks: list[dict[str, Any]] = Field(min_length=1)
     environments: list[dict[str, Any]] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def _validate_layer(self) -> JobSpec:
+        if self.layer == "full":
+            raise ValueError("Job specs do not support layer='full'.")
+        return self
+
 
 class PipelineSpec(ResourceSpecBase):
+    pipeline_kind: PipelineKind = "single_layer"
     development: bool | None = None
     continuous: bool | None = None
     serverless: bool = True
@@ -56,3 +64,11 @@ class PipelineSpec(ResourceSpecBase):
     libraries: list[dict[str, Any]] = Field(default_factory=list)
     environment: dict[str, Any] | None = None
     tags: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_pipeline_kind(self) -> PipelineSpec:
+        if self.pipeline_kind == "full_stack" and self.layer != "full":
+            raise ValueError("Full-stack pipelines require layer='full'.")
+        if self.pipeline_kind == "single_layer" and self.layer == "full":
+            raise ValueError("Single-layer pipelines do not allow layer='full'.")
+        return self

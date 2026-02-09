@@ -44,3 +44,15 @@ Databricks Asset Bundle monorepo using Python-defined resources with strict gene
 
 - Spec: `specs/pipelines/template_domain/template_source/basic_continuous.yml`
 - Generate: `just build-pipeline-resource spec=specs/pipelines/template_domain/template_source/basic_continuous.yml`
+
+## Example full-stack DLT streaming pipeline
+
+- Spec: `specs/pipelines/finance/erp/core_streaming_full_stack.yml`
+- Generate: `just build-pipeline-resource spec=specs/pipelines/finance/erp/core_streaming_full_stack.yml`
+- Validate (dev): `databricks bundle validate -t dev`
+- Deploy (dev): `databricks bundle deploy -t dev`
+- Source layers:
+  - `src/finance/erp/raw/`
+  - `src/finance/erp/base/`
+  - `src/finance/erp/staging/`
+  - `src/finance/erp/final/`

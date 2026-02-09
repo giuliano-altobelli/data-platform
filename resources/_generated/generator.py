@@ -107,9 +107,38 @@ def _path_from_library_value(key: str, value: Any) -> str:
     raise ValueError(f"Library '{key}' must be a path string or a mapping with 'path'.")
 
 
-def _normalize_pipeline_libraries(spec: PipelineSpec, layer_path: str) -> list[dict[str, Any]]:
+def _build_pipeline_paths(spec: PipelineSpec) -> tuple[str, str, str, str]:
+    source_root = f"src/{spec.domain}/{spec.source}"
+    layer_path = f"{source_root}/{spec.layer}"
+
+    if spec.pipeline_kind == "full_stack":
+        root_path = source_root
+        allowed_library_root = source_root
+    else:
+        root_path = layer_path
+        allowed_library_root = layer_path
+
+    return source_root, layer_path, root_path, allowed_library_root
+
+
+def _default_pipeline_libraries(
+    spec: PipelineSpec, source_root: str, layer_path: str
+) -> list[dict[str, Any]]:
+    if spec.pipeline_kind == "full_stack":
+        return [
+            {"glob": {"include": f"{source_root}/raw/**"}},
+            {"glob": {"include": f"{source_root}/base/**"}},
+            {"glob": {"include": f"{source_root}/staging/**"}},
+            {"glob": {"include": f"{source_root}/final/**"}},
+        ]
+    return [{"glob": {"include": f"{layer_path}/**"}}]
+
+
+def _normalize_pipeline_libraries(
+    spec: PipelineSpec, source_root: str, layer_path: str, allowed_library_root: str
+) -> list[dict[str, Any]]:
     if not spec.libraries:
-        return [{"glob": {"include": f"{layer_path}/**"}}]
+        return _default_pipeline_libraries(spec, source_root=source_root, layer_path=layer_path)
 
     supported_keys = {"glob", "file", "notebook"}
     normalized: list[dict[str, Any]] = []
@@ -127,7 +156,12 @@ def _normalize_pipeline_libraries(spec: PipelineSpec, layer_path: str) -> list[d
         key = next(iter(library_keys))
         value = library[key]
         candidate_path = _path_from_library_value(key, value)
-        if not candidate_path.startswith(f"{layer_path}/"):
+        if not candidate_path.startswith(f"{allowed_library_root}/"):
+            if spec.pipeline_kind == "full_stack":
+                raise ValueError(
+                    "Pipeline library path must align to source folder "
+                    f"'{source_root}/'. Found: {candidate_path}"
+                )
             raise ValueError(
                 "Pipeline library path must align to layer folder "
                 f"'{layer_path}/'. Found: {candidate_path}"
@@ -139,13 +173,18 @@ def _normalize_pipeline_libraries(spec: PipelineSpec, layer_path: str) -> list[d
 
 
 def build_pipeline_resource_dict(spec: PipelineSpec) -> dict[str, Any]:
-    layer_path = f"src/{spec.domain}/{spec.source}/{spec.layer}"
+    source_root, layer_path, root_path, allowed_library_root = _build_pipeline_paths(spec)
 
     resource: dict[str, Any] = {
         "catalog": spec.domain,
-        "libraries": _normalize_pipeline_libraries(spec, layer_path),
+        "libraries": _normalize_pipeline_libraries(
+            spec,
+            source_root=source_root,
+            layer_path=layer_path,
+            allowed_library_root=allowed_library_root,
+        ),
         "name": spec.resource_name,
-        "root_path": layer_path,
+        "root_path": root_path,
         "schema": spec.source,
         "serverless": spec.serverless,
         "tags": _merge_tags(spec.tags, spec.domain, spec.source, spec.layer),
@@ -181,7 +220,7 @@ def _render_module(
     variable_name: str,
     resource_payload: dict[str, Any],
 ) -> str:
-    formatted_payload = pprint.pformat(resource_payload, indent=4, sort_dicts=True, width=100)
+    formatted_payload = pprint.pformat(resource_payload, indent=4, sort_dicts=True, width=88)
     indented_payload = textwrap.indent(formatted_payload, " " * 4)
 
     return (

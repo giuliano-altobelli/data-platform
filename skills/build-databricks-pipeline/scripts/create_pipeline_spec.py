@@ -6,7 +6,8 @@ import re
 import subprocess
 from pathlib import Path
 
-_LAYER_VALUES = {"raw", "base", "staging", "final"}
+_LAYER_VALUES = {"raw", "base", "staging", "final", "full"}
+_PIPELINE_KINDS = {"single_layer", "full_stack"}
 _NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -47,6 +48,7 @@ def _build_spec_text(
     source: str,
     layer: str,
     asset: str,
+    pipeline_kind: str,
     continuous: bool | None,
     development: bool | None,
     serverless: bool | None,
@@ -58,6 +60,7 @@ def _build_spec_text(
         f"source: {source}",
         f"layer: {layer}",
         f"asset: {asset}",
+        f"pipeline_kind: {pipeline_kind}",
     ]
 
     if continuous is not None:
@@ -74,14 +77,30 @@ def _build_spec_text(
         for key in sorted(configuration):
             lines.append(f"  {key}: {configuration[key]}")
 
-    lines.extend(
-        [
-            "libraries:",
-            "  - glob:",
-            f"      include: src/{domain}/{source}/{layer}/**",
-            "",
-        ]
-    )
+    if pipeline_kind == "full_stack":
+        lines.extend(
+            [
+                "libraries:",
+                "  - glob:",
+                f"      include: src/{domain}/{source}/raw/**",
+                "  - glob:",
+                f"      include: src/{domain}/{source}/base/**",
+                "  - glob:",
+                f"      include: src/{domain}/{source}/staging/**",
+                "  - glob:",
+                f"      include: src/{domain}/{source}/final/**",
+                "",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "libraries:",
+                "  - glob:",
+                f"      include: src/{domain}/{source}/{layer}/**",
+                "",
+            ]
+        )
     return "\n".join(lines)
 
 
@@ -97,6 +116,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True)
     parser.add_argument("--layer", required=True, choices=sorted(_LAYER_VALUES))
     parser.add_argument("--asset", required=True)
+    parser.add_argument("--pipeline-kind", default="single_layer", choices=sorted(_PIPELINE_KINDS))
     parser.add_argument("--spec-path")
     parser.add_argument("--channel")
     parser.add_argument("--config", action="append", default=[])
@@ -120,6 +140,13 @@ def main() -> int:
         print(f"Error: {exc}")
         return 1
 
+    if args.pipeline_kind == "full_stack" and args.layer != "full":
+        print("Error: --pipeline-kind full_stack requires --layer full.")
+        return 1
+    if args.pipeline_kind == "single_layer" and args.layer == "full":
+        print("Error: --pipeline-kind single_layer does not allow --layer full.")
+        return 1
+
     spec_path = _resolve_spec_path(args.spec_path, domain, source, asset)
     if spec_path.exists() and not args.overwrite:
         print(f"Error: Spec already exists: {spec_path}. Use --overwrite to replace it.")
@@ -131,6 +158,7 @@ def main() -> int:
         source=source,
         layer=args.layer,
         asset=asset,
+        pipeline_kind=args.pipeline_kind,
         continuous=args.continuous,
         development=args.development,
         serverless=args.serverless,
