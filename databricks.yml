@@ -1,0 +1,25 @@
+bundle:
+  name: data_platform
+  uuid: 865d2ab6-778a-4be9-a09c-9f74b4c5f1df
+
+python:
+  venv_path: .venv
+  resources:
+    - "resources:load_resources"
+
+include:
+  - resources/*.yml
+  - resources/*/*.yml
+  - resources/*/*/*.yml
+  - resources/*/*/*/*.yml
+  - targets/*.yml
+
+artifacts:
+  python_artifact:
+    type: whl
+    build: uv build --wheel
+
+variables:
+  workspace_root_prefix:
+    description: Workspace root path prefix for shared bundle deployments.
+    default: /Workspace/Shared/.bundle

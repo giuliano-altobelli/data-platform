@@ -1,0 +1,6 @@
+targets:
+  prod:
+    mode: production
+    workspace:
+      host: https://prod.company.databricks.com
+      root_path: ${var.workspace_root_prefix}/${bundle.name}/${bundle.target}

@@ -1,0 +1,7 @@
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dev.company.databricks.com
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
