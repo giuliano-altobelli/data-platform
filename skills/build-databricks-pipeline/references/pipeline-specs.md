@@ -8,6 +8,8 @@
 - `asset`: lowercase snake_case asset identifier.
 
 Generated name format: `{domain}_{source}_{layer}_{asset}`.
+Generated Databricks resource display name:
+`{domain}_{source}_{layer}_{asset}_${bundle.target}`.
 
 ## Optional fields
 

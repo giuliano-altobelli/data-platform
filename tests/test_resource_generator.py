@@ -47,6 +47,7 @@ def test_job_generation_is_deterministic(tmp_path: Path) -> None:
 
     assert first_output_path == second_output_path
     assert first_output == second_output
+    assert "'name': 'finance_erp_raw_ingest_transactions_${bundle.target}'" in first_output
     assert "finance_erp_raw_ingest_transactions = Job.from_dict(" in first_output
     assert "'catalog'" in first_output
     assert "'schema'" in first_output
@@ -101,7 +102,9 @@ def test_pipeline_mapping_enforces_catalog_schema_and_layer_paths(tmp_path: Path
     output_path = build_pipeline_resource(spec_path, resource_root=tmp_path / "resources")
     rendered = output_path.read_text(encoding="utf-8")
 
+    assert output_path.name == "finance_erp_staging_customer_360.py"
     assert "'catalog': 'finance'" in rendered
+    assert "'name': 'finance_erp_staging_customer_360_${bundle.target}'" in rendered
     assert "'schema': 'erp'" in rendered
     assert "'root_path': 'src/finance/erp/staging'" in rendered
 
@@ -113,6 +116,7 @@ def test_pipeline_mapping_enforces_catalog_schema_and_layer_paths(tmp_path: Path
     )
     payload = build_pipeline_resource_dict(spec)
     assert payload["catalog"] == "finance"
+    assert payload["name"] == "finance_erp_staging_customer_360_${bundle.target}"
     assert payload["schema"] == "erp"
 
 
@@ -145,7 +149,7 @@ def test_full_stack_pipeline_sets_source_root_and_layered_libraries() -> None:
     payload = build_pipeline_resource_dict(spec)
     assert payload["catalog"] == "finance"
     assert payload["schema"] == "erp"
-    assert payload["name"] == "finance_erp_full_core_streaming"
+    assert payload["name"] == "finance_erp_full_core_streaming_${bundle.target}"
     assert payload["root_path"] == "src/finance/erp"
     assert payload["libraries"] == [
         {"glob": {"include": "src/finance/erp/raw/**"}},

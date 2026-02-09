@@ -10,7 +10,7 @@ template_domain_template_source_staging_basic_continuous = Pipeline.from_dict(
         "development": True,
         "environment": {"dependencies": ["--editable ${workspace.file_path}"]},
         "libraries": [{"glob": {"include": "src/template_domain/template_source/staging/**"}}],
-        "name": "template_domain_template_source_staging_basic_continuous",
+        "name": "template_domain_template_source_staging_basic_continuous_${bundle.target}",
         "root_path": "src/template_domain/template_source/staging",
         "schema": "template_source",
         "serverless": True,

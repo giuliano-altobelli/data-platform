@@ -18,7 +18,7 @@ finance_erp_full_core_streaming = Pipeline.from_dict(
             {"glob": {"include": "src/finance/erp/staging/**"}},
             {"glob": {"include": "src/finance/erp/final/**"}},
         ],
-        "name": "finance_erp_full_core_streaming",
+        "name": "finance_erp_full_core_streaming_${bundle.target}",
         "root_path": "src/finance/erp",
         "schema": "erp",
         "serverless": True,
