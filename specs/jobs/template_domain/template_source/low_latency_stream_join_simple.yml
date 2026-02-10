@@ -1,0 +1,49 @@
+domain: template_domain
+source: template_source
+layer: staging
+asset: low_latency_stream_join_simple
+description: Simple low-latency streaming join example with bounded state.
+max_concurrent_runs: 1
+email_notifications:
+  on_failure:
+    - data-platform-alerts@example.com
+tags:
+  owner: data-platform
+parameters:
+  - name: fact_stream_table
+    default: bronze.fact_events
+  - name: session_stream_table
+    default: bronze.session_events
+  - name: attribution_stream_table
+    default: bronze.attribution_events
+  - name: customer_dim_table
+    default: silver.dim_customer_current
+  - name: product_dim_table
+    default: silver.dim_product_current
+  - name: target_table
+    default: gold.final_enriched_events_simple
+  - name: checkpoint_location
+    default: /Volumes/template_domain/template_source/checkpoints/low_latency_stream_join_simple
+  - name: trigger_interval
+    default: 5 seconds
+tasks:
+  - task_key: run_low_latency_stream_join_simple
+    spark_python_task:
+      python_file: src/template_domain/template_source/staging/low_latency_stream_join_simple_job.py
+      parameters:
+        - --fact-stream-table
+        - "{{job.parameters.fact_stream_table}}"
+        - --session-stream-table
+        - "{{job.parameters.session_stream_table}}"
+        - --attribution-stream-table
+        - "{{job.parameters.attribution_stream_table}}"
+        - --customer-dim-table
+        - "{{job.parameters.customer_dim_table}}"
+        - --product-dim-table
+        - "{{job.parameters.product_dim_table}}"
+        - --target-table
+        - "{{job.parameters.target_table}}"
+        - --checkpoint-location
+        - "{{job.parameters.checkpoint_location}}"
+        - --trigger-interval
+        - "{{job.parameters.trigger_interval}}"
