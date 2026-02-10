@@ -47,6 +47,17 @@ Databricks Asset Bundle monorepo using Python-defined resources with strict gene
 - Spec: `specs/pipelines/template_domain/template_source/basic_continuous.yml`
 - Generate: `just build-pipeline-resource spec=specs/pipelines/template_domain/template_source/basic_continuous.yml`
 
+## Simple low-latency stream join job
+
+- Job spec: `specs/jobs/template_domain/template_source/low_latency_stream_join_simple.yml`
+- Source: `src/template_domain/template_source/staging/low_latency_stream_join_simple_job.py`
+- Generate: `just build-job-resource spec=specs/jobs/template_domain/template_source/low_latency_stream_join_simple.yml`
+- Monitoring:
+  - Find `inputRowsPerSecond`: Job run -> streaming task -> query Metrics/Timelines.
+  - In logs, monitor `STREAM_MONITOR` JSON lines for `input_rows_per_second`, `processed_rows_per_second`, `trigger_execution_ms`, and `state_rows_total`.
+  - Alert conditions in code: `trigger_execution_ms > 45000` or `backlog_streak >= 6` (logged as `STREAM_MONITOR_ALERT`).
+  - First triage: check source lag, then scale fixed workers (2 -> 4) and keep `spark.sql.shuffle.partitions` aligned (8 -> 16).
+
 ## Example full-stack DLT streaming pipeline
 
 - Spec: `specs/pipelines/finance/erp/core_streaming_full_stack.yml`

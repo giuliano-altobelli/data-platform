@@ -1,0 +1,74 @@
+domain: template_domain
+source: template_source
+layer: staging
+asset: low_latency_stream_join
+description: Low-latency multi-stream enrichment with bounded stream-stream joins and static dimensions.
+max_concurrent_runs: 1
+tags:
+  owner: data-platform
+parameters:
+  - name: fact_stream_table
+    default: bronze.fact_events
+  - name: session_stream_table
+    default: bronze.session_events
+  - name: attribution_stream_table
+    default: bronze.attribution_events
+  - name: customer_dim_table
+    default: silver.dim_customer_current
+  - name: product_dim_table
+    default: silver.dim_product_current
+  - name: target_table
+    default: gold.final_enriched_events
+  - name: checkpoint_location
+    default: /Volumes/template_domain/template_source/checkpoints/low_latency_stream_join
+  - name: trigger_interval
+    default: 5 seconds
+  - name: fact_watermark
+    default: 30 seconds
+  - name: session_watermark
+    default: 30 seconds
+  - name: attribution_watermark
+    default: 45 seconds
+  - name: session_window_seconds
+    default: "30"
+  - name: attribution_window_seconds
+    default: "45"
+  - name: shuffle_partitions
+    default: "8"
+  - name: no_data_micro_batches
+    default: "false"
+tasks:
+  - task_key: run_low_latency_stream_join
+    spark_python_task:
+      python_file: src/template_domain/template_source/staging/low_latency_stream_join_job.py
+      parameters:
+        - --fact-stream-table
+        - "{{job.parameters.fact_stream_table}}"
+        - --session-stream-table
+        - "{{job.parameters.session_stream_table}}"
+        - --attribution-stream-table
+        - "{{job.parameters.attribution_stream_table}}"
+        - --customer-dim-table
+        - "{{job.parameters.customer_dim_table}}"
+        - --product-dim-table
+        - "{{job.parameters.product_dim_table}}"
+        - --target-table
+        - "{{job.parameters.target_table}}"
+        - --checkpoint-location
+        - "{{job.parameters.checkpoint_location}}"
+        - --trigger-interval
+        - "{{job.parameters.trigger_interval}}"
+        - --fact-watermark
+        - "{{job.parameters.fact_watermark}}"
+        - --session-watermark
+        - "{{job.parameters.session_watermark}}"
+        - --attribution-watermark
+        - "{{job.parameters.attribution_watermark}}"
+        - --session-window-seconds
+        - "{{job.parameters.session_window_seconds}}"
+        - --attribution-window-seconds
+        - "{{job.parameters.attribution_window_seconds}}"
+        - --shuffle-partitions
+        - "{{job.parameters.shuffle_partitions}}"
+        - --no-data-micro-batches
+        - "{{job.parameters.no_data_micro_batches}}"
