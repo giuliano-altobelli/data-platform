@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+
+from pydantic import BaseModel
 
 
-@dataclass(slots=True)
-class _PendingLsn:
+class _PendingLsn(BaseModel):
     lsn: int
     published: bool = False
 

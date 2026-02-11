@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True, slots=True)
-class ChangeEvent:
+class ChangeEvent(BaseModel):
     """Single wal2json event destined for Kinesis."""
+
+    model_config = ConfigDict(frozen=True)
 
     lsn: int
     payload: bytes

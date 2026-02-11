@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from typing import Any
 
 import psycopg
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(slots=True)
-class LeaderSession:
+class LeaderSession(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     connection: psycopg.AsyncConnection[Any]
     lock_key: int
 
