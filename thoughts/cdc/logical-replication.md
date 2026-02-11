@@ -21,7 +21,6 @@ Read the AWS doc `docs/streaming/pg_cdc.txt` in full to understand the scope of 
     - include-timestamp: true
     - include-lsn: true
     - include-transactions: false
-    - add-tables: <placeholders>
     - include-pk: true
 
 ## Avoid

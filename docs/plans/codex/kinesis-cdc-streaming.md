@@ -114,7 +114,6 @@ Configure the decoding options (defaults match the research notes):
 - `WAL2JSON_INCLUDE_LSN=true`
 - `WAL2JSON_INCLUDE_TRANSACTIONS=false`
 - `WAL2JSON_INCLUDE_PK=true`
-- `WAL2JSON_ADD_TABLES=<WAL2JSON_ADD_TABLES>` (required; comma-separated patterns)
 
 ### Kinesis
 - `AWS_REGION=<AWS_REGION>`
@@ -139,7 +138,6 @@ Configure the decoding options (defaults match the research notes):
 - `STANDBY_RETRY_INTERVAL_S` (default: 5)
 
 ### Required Placeholders
-- `<WAL2JSON_ADD_TABLES>`
 - `<PGHOST>`
 - `<PGPORT>`
 - `<PGUSER>`
@@ -182,7 +180,6 @@ Defaults:
   - `include-lsn = 1`
   - `include-transactions = 0`
   - `include-pk = 1`
-  - `add-tables = <WAL2JSON_ADD_TABLES>`
 
 ### Replication protocol parsing (minimal, fast)
 Each message begins with a 1-byte type tag.

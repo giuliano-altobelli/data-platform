@@ -46,7 +46,6 @@ class Settings(BaseSettings):
         alias="WAL2JSON_INCLUDE_TRANSACTIONS",
     )
     wal2json_include_pk: bool = Field(default=True, alias="WAL2JSON_INCLUDE_PK")
-    wal2json_add_tables: str = Field(alias="WAL2JSON_ADD_TABLES")
 
     aws_region: str = Field(alias="AWS_REGION")
     kinesis_stream: str = Field(alias="KINESIS_STREAM")
@@ -89,14 +88,6 @@ class Settings(BaseSettings):
                 "REPLICATION_SLOT must only contain ASCII letters, numbers, and underscore"
             )
         return value
-
-    @field_validator("wal2json_add_tables")
-    @classmethod
-    def _validate_add_tables(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("WAL2JSON_ADD_TABLES must be set")
-        return cleaned
 
     @field_validator("kinesis_batch_max_records")
     @classmethod
@@ -148,6 +139,5 @@ class Settings(BaseSettings):
             "include-lsn": _bool_to_wal2json(self.wal2json_include_lsn),
             "include-transactions": _bool_to_wal2json(self.wal2json_include_transactions),
             "include-pk": _bool_to_wal2json(self.wal2json_include_pk),
-            "add-tables": self.wal2json_add_tables,
         }
         return ", ".join(f'"{k}" {_sql_quote(v)}' for k, v in options.items())
