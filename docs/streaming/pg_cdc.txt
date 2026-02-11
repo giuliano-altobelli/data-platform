@@ -1,0 +1,168 @@
+Data consolidation for analytical applications using logical replication for Amazon RDS Multi-AZ clusters
+by Vijay Karumajji, Sean Massey, and Shayon Sanyal on 14 AUG 2023 in Advanced (300), Best Practices, Kinesis Data Streams, RDS for PostgreSQL, Technical How-to Permalink  Comments  Share
+Amazon Relational Database Service (Amazon RDS) Multi-AZ deployments provide enhanced availability and durability for your RDS database instances. You can deploy highly available, durable PostgreSQL databases in three Availability Zones using Amazon RDS Multi-AZ DB cluster deployments with two readable standby DB instances. With a Multi-AZ DB cluster, applications gain automatic failovers in typically under 35 seconds, up to two times faster transaction commit latency compared to Amazon Multi-AZ DB instance deployments without compromising durability, and additional read capacity. In this post, we walk through a use case of data consolidation for analytical applications using logical replication in the context of RDS Multi-AZ DB clusters. We enable and utilize logical replication in an RDS for PostgreSQL Multi-AZ DB cluster and also demonstrate logical replication consumption recovery after a DB instance failover.
+
+AWS announced support for PostgreSQL logical replication with Amazon RDS Multi-AZ DB cluster deployments. Amazon RDS for PostgreSQL supports streaming data changes using PostgreSQL’s logical replication. You can now set up logical replication to send data from your Amazon RDS for PostgreSQL Multi-AZ DB cluster to other data systems, or receive changes from other systems into your Amazon RDS for PostgreSQL Multi-AZ DB cluster. Logical replication is supported for RDS Multi-AZ DB clusters running Amazon RDS for PostgreSQL version 14.8-R2 and higher and 15.3-R2 and higher.
+
+Logical Replication Overview
+PostgreSQL offers two types of replication – physical replication and logical replication. Both methods serve the purpose of creating redundant copies of data to ensure high availability and fault tolerance. Physical replication is also known as streaming replication. In this method, the actual data files (segments) and changes made to them are replicated from the primary database server to one or more standby servers. The replication process occurs at the binary level, meaning the entire data blocks are copied, which makes it efficient for handling large databases with high write loads. However, even small changes to a large block will result in replicating the whole block. In the replication topology, the primary and standby servers must be of the same PostgreSQL major version for compatibility and cannot be used for partial replication or selective replication of specific tables or data subsets.
+
+Logical replication, on the other hand, works at a higher level of abstraction. It replicates changes by understanding the logical structure of the data, which allows for more flexibility in terms of what is replicated and how it is consumed on the standby server. Logical replication gives you fine-grained control over both data replication and security. You can use logical replication between different platforms (for example, Linux to Windows) and different major versions of PostgreSQL, providing more flexibility during upgrades. You can also handle schema changes, such as table and column modifications, without much difficulty. Additionally, you can replicate individual rows or even specific columns, making it more efficient when dealing with selective replication or partial replication scenarios.
+
+Logical replication operates on a publish and subscribe model, utilizing change records from the PostgreSQL write-ahead log (WAL). The source, known as the publisher, transmits these changes for the specified tables to one or more recipients (subscribers) replicating the changes and ensuring synchronization between the publisher and the subscriber. The publisher’s set of changes is identified through a publication, and subscribers access these changes by establishing a subscription that defines the connection to the publisher’s database and its publications. PostgreSQL uses a mechanism called a replication slot to track the progress of a subscription, such as what changes still need to be sent to a subscriber.
+
+In Amazon RDS for PostgreSQL, users can manually create a logical replication slot on the writer DB instance of a Multi-AZ DB cluster. This offers more control and flexibility, and is useful for different change data capture (CDC) systems or troubleshooting existing setups. It is worth noting that the CREATE PUBLICATION/SUBSCRIPTION commands automatically set up the replication slots by default, which cover most use cases and simplifies the process. Manually creating the replication slot requires selecting a decoding plugin, which determines the format used to stream changes. RDS Multi-AZ DB clusters support three plugins: pgoutput (what PostgreSQL uses for logical replication), wal2json, and test_decoding (which is used for troubleshooting and is not recommended for production use) giving you the flexibility to capture changes in different formats for your CDC architectures and use cases.
+
+Logical replication use cases
+There are several common use cases for using logical replication with PostgreSQL, including:
+
+Real-time data streaming and event-driven architectures –Using logical replication allows each change in data to be captured as a discrete event. For instance, changes such as insert, update, or delete statements in your database can each generate a distinct event. These events contain valuable information such as the modified data, changed values, timestamps, and the type of operation performed. This makes logical replication useful for implementing event-driven architectures, building data pipelines, and synchronizing data with other applications or services. To process the received events, you can subscribe to the replication stream and use messaging systems like Amazon Kinesis Data Streams, Amazon Managed Streaming for Apache Kafka (Amazon MSK), or Amazon MQ. These messaging systems provide scalable and fault-tolerant event processing capabilities, allowing you to handle a large volume of events and distribute them to multiple consumers. Additionally, consider leveraging event-driven frameworks or systems that are optimized for efficient event processing. For instance, serverless computing services like AWS Lambda can automatically run your code in response to events, ensuring scalability and fault tolerance in your architecture.
+Data distribution – Logical replication enables you to distribute data across multiple PostgreSQL instances or even different database systems. This is useful for scenarios where you need to share specific tables or subsets of data with other applications or databases. By using logical replication for data distribution, you can achieve better scalability, improved performance, data sharing, and integration across multiple environments and systems. Logical replication provides flexibility in choosing what data to replicate and where to replicate it, enabling you to design and implement a distributed architecture that meets your specific requirements.
+Data integration and ETL – Logical replication can be used for data integration and extract, transform, load (ETL) processes. You can replicate selected tables or entire databases to downstream systems where data can be transformed, merged, or loaded into other systems. You could also use logical replication to consolidate multiple databases into a single one (for example, for Data Analytics).
+Solution overview
+In this example solution, we walk through a demonstration of enabling and utilizing logical replication in an RDS for PostgreSQL Multi-AZ DB cluster. We discuss the creation of a logical replication slot, the configuration of a Kinesis data stream, support for logical replication slots post-failover, and how to consume the replication slot data using a Python script. The following diagram illustrates our solution architecture.
+
+
+
+Prerequisites
+To implement logical replication for an RDS for PostgreSQL Multi-AZ DB cluster, you must have:
+
+An AWS Account.
+The AWS Command Line Interface (AWS CLI).
+A client running the PostgreSQL psql client and PgBench tool with Python installed.
+RDS for PostgreSQL Multi-AZ cluster does not support AWS free tier therefore consider costs for Amazon RDS pricing and AWS Kinesis Data Streams pricing.
+Create a custom parameter group and enable logical replication
+First, we create a DB cluster parameter group and enable logical replication and increase the number of logical replication workers.
+
+# Create a DB cluster parameter group
+aws rds create-db-cluster-parameter-group \
+--db-cluster-parameter-group-name demo-pg-15-etl \
+--db-parameter-group-family postgres15 \
+--description "Demo RDS Multi-AZ Cluster ETL using logical replication" \ 
+--region us-west-2
+
+# Modify the demo DB cluster parameter group to enable logical replication and set the maximum logical replication workers to a value higher than your number of consumers
+aws rds modify-db-cluster-parameter-group \
+--db-cluster-parameter-group-name demo-pg-15-etl \
+--parameters "ParameterName=max_logical_replication_workers,ParameterValue=10,ApplyMethod=pending-reboot" \
+ "ParameterName=rds.logical_replication,ParameterValue=1,ApplyMethod=pending-reboot" \
+--region us-west-2
+For more information on how to perform this step using the console, see Modifying parameters in a DB cluster parameter group and Working with parameter groups for Multi-AZ DB clusters.
+
+Create an RDS for PostgreSQL Multi-AZ cluster and DB cluster parameter group
+Our next step is to create an RDS for PostgreSQL Multi-AZ cluster. To do this, we use the AWS Command Line interface (AWS CLI). We configure the new DB cluster to use the custom parameter group we created previously.
+
+# Create a demo DB cluster
+aws rds create-db-cluster \
+--db-cluster-identifier demo-multi-az-cluster-etl-source \
+--db-cluster-parameter-group-name demo-pg-15-etl \
+--engine postgres \
+--engine-version 15.3 \
+--db-subnet-group-name default \
+--master-user-password $PGPASSWORD \
+--master-username $PGUSER \
+--db-cluster-instance-class db.m6gd.large \
+--allocated-storage 100 \
+--storage-type io1 \
+--iops 1000 \
+--region us-west-2
+For instructions on how to perform this step using the AWS Management Console, see Creating a Multi-AZ cluster
+
+Create a Kinesis data stream
+While the DB cluster is rebooting, we can create the Kinesis data stream, which will be the target for logical replication. Kinesis Data Streams allows you to ingest, process, and analyze real-time streaming data and can be used to stream data into other targets such as Amazon Redshift.
+
+# Create Kinesis data stream
+aws kinesis create-stream \
+--stream-name etl_demo \
+--shard-count 1 \
+--region us-west-2
+For instructions on how to perform this step using the console, see Creating a Stream via the AWS Management Console.
+
+Create test tables and data
+After we have configured the DB cluster, we need to create test data. In this example, we use pgbench to create dummy tables and data:
+
+# Create some dummy tables and data using pgbench
+pgbench -is 10 \
+-h demo-multi-az-cluster-etl-source.cluster-abcd123dummy.us-west-2.rds.amazonaws.com \
+-p 5432 \
+-U $PGUSER \
+-d $PGDATABASE
+Create a role and replication slot
+To enable logical replication, we must create a database role for replication and grant the role the necessary permissions. After the role is created, we create a logical replication slot on our source DB cluster. For this example, we use the wal2json decoding output.
+
+# Connect to the source DB instance and create a role for replicaton
+psql -h demo-multi-az-cluster-etl-source.cluster-abcd123dummy.us-west-2.rds.amazonaws.com \
+-p 5432 \
+-U $PGUSER \
+-d $PGDATABASE
+
+postgres=> CREATE USER repluser;
+CREATE ROLE
+postgres=> GRANT rds_replication to repluser;
+GRANT ROLE
+postgres=> \password repluser
+Enter new password for user "repluser":
+Enter it again:
+
+# Create logical replication slot on source DB cluster
+SELECT * FROM pg_create_logical_replication_slot('etl_slot_wal2json','wal2json');
+For more information, see Create user and Logical Decoding.
+
+Consume the replication stream
+Finally, we consume the logical replication stream using the following Python script. The script connects to the DB cluster endpoint, starts consuming the replication stream, and forwards each record to the Kinesis data stream. The script also prints the payload to the standard output. The script has a simple retry mechanism to support reconnecting to the DB cluster endpoint if there is an interruption.
+
+To run this script, you need a client with network access to the RDS for PostgreSQL Multi-AZ DB cluster with Python and the PostgreSQL client tools installed.
+
+$ pip3 install boto3 psycopg2-binary
+$ cat consume_slot.py
+import boto3
+import json
+import time
+import pdb
+import psycopg2
+from psycopg2.extras import LogicalReplicationConnection
+import os
+
+my_slot_name = 'etl_slot_wal2json'
+my_stream_name = 'etl_demo'
+kinesis_client = boto3.client('kinesis', region_name='us-west-2')
+
+host = os.getenv('PGHOST')
+user = os.getenv('PGUSER')
+port = os.getenv('PGPORT')
+password = os.getenv('PGPASSWORD')
+database = os.getenv('PGDATABASE')
+
+def consume(msg):
+    kinesis_client.put_record(StreamName=my_stream_name, Data=json.dumps(msg.payload), PartitionKey="default")
+    print(msg.payload)
+
+def consume_replication_stream():
+    my_connection = psycopg2.connect(
+            f"dbname={database} host={host} port={port} user={user} password={password}",
+        connection_factory=LogicalReplicationConnection)
+    cur = my_connection.cursor()
+    cur.drop_replication_slot(my_slot_name)
+    cur.create_replication_slot(my_slot_name, output_plugin='wal2json')
+    cur.start_replication(slot_name=my_slot_name, options={'pretty-print': 1}, decode=True)
+    print(f'Successfully connected to slot {my_stream_name}')
+    cur.consume_stream(consume)
+
+def main():
+    retries = 10
+    for i in range(retries):
+        try:
+            consume_replication_stream()
+            break  # Success! So we break out the loop
+        except Exception as e:
+            print(f"Error occurred: {e}. Retrying...")
+            time.sleep(30)  # Wait for 30 seconds before retrying
+            if i == retries - 1:  # If we've retried up to the maximum retries allowed, raise the exception to be handled by the next level
+                raise
+
+if __name__ == '__main__':
+    main()
+Run the script:
+
+$ python3 consume_slot.py
+Successfully connected to slot etl_demo
