@@ -4,7 +4,7 @@ import hashlib
 import json
 from typing import Any
 
-from cdc_logical_replication.protocol import lsn_int_to_str
+from src.cdc_logical_replication.protocol import lsn_int_to_str
 
 PARTITION_KEY_MAX_LEN = 256
 

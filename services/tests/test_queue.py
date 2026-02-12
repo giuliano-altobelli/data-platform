@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-from cdc_logical_replication.models import ChangeEvent
-from cdc_logical_replication.queue import InflightEventQueue
+from src.cdc_logical_replication.models import ChangeEvent
+from src.cdc_logical_replication.queue import InflightEventQueue
 
 
 def _event(lsn: int, payload_size: int) -> ChangeEvent:

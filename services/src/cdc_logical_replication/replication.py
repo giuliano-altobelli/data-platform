@@ -6,18 +6,18 @@ from typing import Any
 
 import psycopg
 
-from cdc_logical_replication.ack import AckTracker
-from cdc_logical_replication.models import ChangeEvent
-from cdc_logical_replication.partition_key import extract_partition_key
-from cdc_logical_replication.protocol import (
+from src.cdc_logical_replication.ack import AckTracker
+from src.cdc_logical_replication.models import ChangeEvent
+from src.cdc_logical_replication.partition_key import extract_partition_key
+from src.cdc_logical_replication.protocol import (
     ReplicationProtocolError,
     build_standby_status,
     lsn_int_to_str,
     parse_keepalive,
     parse_xlogdata,
 )
-from cdc_logical_replication.queue import InflightEventQueue
-from cdc_logical_replication.settings import Settings
+from src.cdc_logical_replication.queue import InflightEventQueue
+from src.cdc_logical_replication.settings import Settings
 
 
 def build_start_replication_statement(

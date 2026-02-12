@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from cdc_logical_replication.partition_key import extract_partition_key
-from cdc_logical_replication.protocol import lsn_str_to_int
+from src.cdc_logical_replication.partition_key import extract_partition_key
+from src.cdc_logical_replication.protocol import lsn_str_to_int
 
 
 def test_primary_key_mode_uses_wal2json_pk() -> None:

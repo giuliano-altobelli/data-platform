@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from cdc_logical_replication.protocol import (
+from src.cdc_logical_replication.protocol import (
     KEEPALIVE,
     XLOGDATA_HDR,
     build_standby_status,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from cdc_logical_replication.ack import AckTracker
+from src.cdc_logical_replication.ack import AckTracker
 
 
 def test_frontier_advances_only_for_contiguous_successes() -> None:

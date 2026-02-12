@@ -4,13 +4,13 @@ import asyncio
 import logging
 import os
 
-from cdc_logical_replication.ack import AckTracker
-from cdc_logical_replication.kinesis import KinesisPublisher, create_kinesis_client
-from cdc_logical_replication.leader import LeaderSession, leadership_watchdog, wait_for_leadership
-from cdc_logical_replication.queue import InflightEventQueue
-from cdc_logical_replication.replication import consume_replication_stream
-from cdc_logical_replication.settings import Settings
-from cdc_logical_replication.slot import ensure_replication_slot
+from src.cdc_logical_replication.ack import AckTracker
+from src.cdc_logical_replication.kinesis import KinesisPublisher, create_kinesis_client
+from src.cdc_logical_replication.leader import LeaderSession, leadership_watchdog, wait_for_leadership
+from src.cdc_logical_replication.queue import InflightEventQueue
+from src.cdc_logical_replication.replication import consume_replication_stream
+from src.cdc_logical_replication.settings import Settings
+from src.cdc_logical_replication.slot import ensure_replication_slot
 
 LOGGER = logging.getLogger(__name__)
 
