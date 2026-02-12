@@ -225,3 +225,24 @@ Notes:
 
 - peek does not advance the slot; get_changes does.
 - If active=true, stop the other consumer first.
+
+
+## Docker
+FROM python:3.12-slim AS base
+ ENV PYTHONDONTWRITEBYTECODE=1 \
+     PYTHONUNBUFFERED=1 \
+     PIP_NO_CACHE_DIR=1
+ WORKDIR /app
+ # Optional: install certificates/tzdata if your base image is minimal
+ # Copy app source
+ COPY services/src /app/src
+ # Run as non-root
+ RUN useradd -u 10001 -m appuser
+ USER appuser
+ # EKS-friendly entrypoint
+ CMD ["python", "-m", "cdc_logical_replication"]
+ Image behavior on EKS:
+ - Stateless, long-running process.
+ - Config comes from env vars (PG*, AWS_REGION, KINESIS_STREAM, optional REPLICATION_SLOT).
+ - Uses IRSA in EKS for AWS auth (no static creds in image).
+ If you want, I can draft the exact production-ready Dockerfile + .dockerignore for this repo layout (including locked deps via uv.lock).
