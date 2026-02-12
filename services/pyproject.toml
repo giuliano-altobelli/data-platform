@@ -24,3 +24,8 @@ packages = ["src/cdc_logical_replication"]
 
 [project.scripts]
 cdc-logical-replication = "cdc_logical_replication.__main__:main"
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: tests requiring live Postgres + AWS Kinesis infrastructure",
+]

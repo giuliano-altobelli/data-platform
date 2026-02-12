@@ -5,7 +5,11 @@ from src.cdc_logical_replication.protocol import lsn_str_to_int
 
 
 def test_primary_key_mode_uses_wal2json_pk() -> None:
-    payload = b'{"change":[{"schema":"public","table":"orders","pk":[{"name":"id","value":42}]}]}\n'
+    payload = (
+        b'{"action":"I","schema":"public","table":"orders",'
+        b'"columns":[{"name":"id","value":42},{"name":"status","value":"created"}],'
+        b'"pk":[{"name":"id","type":"bigint"}]}\n'
+    )
 
     partition_key = extract_partition_key(
         payload,
@@ -16,6 +20,23 @@ def test_primary_key_mode_uses_wal2json_pk() -> None:
     )
 
     assert partition_key == "public.orders:id=42"
+
+
+def test_primary_key_mode_uses_identity_values_for_delete() -> None:
+    payload = (
+        b'{"action":"D","schema":"public","table":"orders",'
+        b'"identity":[{"name":"id","value":7}],"pk":[{"name":"id","type":"bigint"}]}'
+    )
+
+    partition_key = extract_partition_key(
+        payload,
+        lsn=lsn_str_to_int("0/16B6D80"),
+        mode="primary_key",
+        fallback="lsn",
+        static_fallback_value=None,
+    )
+
+    assert partition_key == "public.orders:id=7"
 
 
 def test_primary_key_mode_falls_back_when_payload_invalid() -> None:
@@ -31,7 +52,7 @@ def test_primary_key_mode_falls_back_when_payload_invalid() -> None:
 
 
 def test_table_fallback_prefers_schema_table() -> None:
-    payload = b'{"change":[{"schema":"finance","table":"transactions"}]}'
+    payload = b'{"action":"I","schema":"finance","table":"transactions"}'
 
     partition_key = extract_partition_key(
         payload,
@@ -64,9 +85,9 @@ def test_static_fallback_requires_value() -> None:
 def test_long_keys_are_hashed() -> None:
     long_value = "x" * 300
     payload = (
-        b'{"change":[{"schema":"public","table":"orders","pk":[{"name":"id","value":"'
+        b'{"action":"I","schema":"public","table":"orders","columns":[{"name":"id","value":"'
         + long_value.encode("utf-8")
-        + b'"}]}]}'
+        + b'"}],"pk":[{"name":"id","type":"text"}]}'
     )
 
     partition_key = extract_partition_key(

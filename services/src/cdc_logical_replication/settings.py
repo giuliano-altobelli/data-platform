@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     output_plugin: Literal["wal2json"] = Field(default="wal2json", alias="OUTPUT_PLUGIN")
     connect_timeout_s: int = Field(default=5, alias="CONNECT_TIMEOUT_S")
 
-    wal2json_format_version: int = Field(default=2, alias="WAL2JSON_FORMAT_VERSION")
+    wal2json_format_version: Literal[2] = Field(default=2, alias="WAL2JSON_FORMAT_VERSION")
     wal2json_include_timestamp: bool = Field(default=True, alias="WAL2JSON_INCLUDE_TIMESTAMP")
     wal2json_include_lsn: bool = Field(default=True, alias="WAL2JSON_INCLUDE_LSN")
     wal2json_include_transactions: bool = Field(
@@ -46,6 +46,7 @@ class Settings(BaseSettings):
         alias="WAL2JSON_INCLUDE_TRANSACTIONS",
     )
     wal2json_include_pk: bool = Field(default=True, alias="WAL2JSON_INCLUDE_PK")
+    wal2json_add_tables: str | None = Field(default=None, alias="WAL2JSON_ADD_TABLES")
 
     aws_region: str = Field(alias="AWS_REGION")
     kinesis_stream: str = Field(alias="KINESIS_STREAM")
@@ -137,7 +138,10 @@ class Settings(BaseSettings):
             "format-version": str(self.wal2json_format_version),
             "include-timestamp": _bool_to_wal2json(self.wal2json_include_timestamp),
             "include-lsn": _bool_to_wal2json(self.wal2json_include_lsn),
-            "include-transactions": _bool_to_wal2json(self.wal2json_include_transactions),
+            # wal2json option name is singular ("include-transaction").
+            "include-transaction": _bool_to_wal2json(self.wal2json_include_transactions),
             "include-pk": _bool_to_wal2json(self.wal2json_include_pk),
         }
+        if self.wal2json_add_tables:
+            options["add-tables"] = self.wal2json_add_tables
         return ", ".join(f'"{k}" {_sql_quote(v)}' for k, v in options.items())
