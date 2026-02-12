@@ -64,14 +64,15 @@ def _primary_key_from_payload(parsed_payload: dict[str, Any] | None) -> str | No
     if not parsed_payload:
         return None
 
-    change = _first_change(parsed_payload)
-    if not change:
+    table_name = _table_name(parsed_payload)
+    if table_name == "unknown.unknown":
         return None
 
-    pk_entries = change.get("pk")
+    pk_entries = parsed_payload.get("pk")
     if not isinstance(pk_entries, list) or not pk_entries:
         return None
 
+    named_values = _column_value_map(parsed_payload)
     key_parts: list[str] = []
     for entry in pk_entries:
         if not isinstance(entry, dict):
@@ -82,12 +83,15 @@ def _primary_key_from_payload(parsed_payload: dict[str, Any] | None) -> str | No
             continue
 
         value = entry.get("value")
+        if value is None and name in named_values:
+            value = named_values[name]
+        if value is None:
+            continue
         key_parts.append(f"{name}={value}")
 
     if not key_parts:
         return None
 
-    table_name = _table_name(change)
     return f"{table_name}:{'|'.join(key_parts)}"
 
 
@@ -102,11 +106,9 @@ def _fallback_key(
         return lsn_int_to_str(lsn)
 
     if fallback == "table":
-        change = _first_change(parsed_payload)
-        if change:
-            table_name = _table_name(change)
-            if table_name != "unknown.unknown":
-                return table_name
+        table_name = _table_name(parsed_payload)
+        if table_name != "unknown.unknown":
+            return table_name
         return lsn_int_to_str(lsn)
 
     if fallback == "static":
@@ -117,24 +119,30 @@ def _fallback_key(
     raise ValueError(f"Unsupported fallback partition key mode: {fallback}")
 
 
-def _first_change(parsed_payload: dict[str, Any] | None) -> dict[str, Any] | None:
+def _column_value_map(parsed_payload: dict[str, Any]) -> dict[str, Any]:
+    value_by_name: dict[str, Any] = {}
+    for field in ("identity", "columns"):
+        entries = parsed_payload.get(field)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("name")
+            if not isinstance(name, str):
+                continue
+            if "value" not in entry:
+                continue
+            value_by_name[name] = entry["value"]
+    return value_by_name
+
+
+def _table_name(parsed_payload: dict[str, Any] | None) -> str:
     if not parsed_payload:
-        return None
+        return "unknown.unknown"
 
-    change_records = parsed_payload.get("change")
-    if not isinstance(change_records, list) or not change_records:
-        return None
-
-    first = change_records[0]
-    if not isinstance(first, dict):
-        return None
-
-    return first
-
-
-def _table_name(change: dict[str, Any]) -> str:
-    schema = change.get("schema") if isinstance(change.get("schema"), str) else "unknown"
-    table = change.get("table") if isinstance(change.get("table"), str) else "unknown"
+    schema = parsed_payload.get("schema") if isinstance(parsed_payload.get("schema"), str) else "unknown"
+    table = parsed_payload.get("table") if isinstance(parsed_payload.get("table"), str) else "unknown"
     return f"{schema}.{table}"
 
 

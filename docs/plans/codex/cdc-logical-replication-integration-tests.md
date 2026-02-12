@@ -155,6 +155,22 @@ Tests assume AWS creds already available via env vars.
 - `uv run pytest -q -m integration` (or equivalent) runs locally when env vars are set and infra exists.
 - Tests are skipped by default unless explicitly enabled.
 
+### Checkpoint (Execution Log, Not Plan Changes)
+- Date: February 12, 2026
+- Status: Phase 2 implemented and validated locally against the Phase 1 dev stack outputs.
+- Test coverage added:
+  - `services/tests/integration/test_cdc_logical_replication_e2e.py`
+  - `services/tests/test_settings.py` (enforces `WAL2JSON_FORMAT_VERSION=2` only)
+  - updated `services/tests/test_partition_key.py` for format-version 2 envelope semantics
+- Runtime/implementation deltas required to complete Phase 2:
+  - psycopg `3.3.2` `cursor.copy()` rejects `COPY_BOTH`; replication streaming now uses low-level `copy_from`/`copy_to` with explicit `COPY_BOTH` status checks in `services/src/cdc_logical_replication/replication.py`.
+  - replication read loop changed to a persistent non-cancelled read task; timeout polling no longer cancels active `COPY_BOTH` reads.
+  - wal2json `format-version=2` on RDS emits top-level action envelopes (`action`, `schema`, `table`, `columns`/`identity`, `pk`) instead of v1-style `change[]` batches; integration parsing/assertions and partition-key extraction were aligned to this shape.
+  - integration test uses an isolated per-test replication slot (created + best-effort dropped) to avoid interference from stale shared-slot backlog.
+- Validation summary:
+  - `uv run pytest -q tests -m "not integration"` passed.
+  - live integration test passed with elevated permissions using env vars sourced from Terraform outputs.
+
 ## Assumptions
 - AWS account has default VPC (or implementer documents `vpc_id`/`subnet_ids` path).
 - RDS supports `wal2json` plugin for the chosen engine version.

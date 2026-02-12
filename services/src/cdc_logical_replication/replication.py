@@ -5,6 +5,8 @@ from time import monotonic
 from typing import Any
 
 import psycopg
+from psycopg import pq
+from psycopg.generators import copy_from, copy_to
 
 from src.cdc_logical_replication.ack import AckTracker
 from src.cdc_logical_replication.models import ChangeEvent
@@ -33,6 +35,23 @@ def build_start_replication_statement(
     )
 
 
+class _ReplicationStream:
+    """Minimal COPY_BOTH wrapper for logical replication frames."""
+
+    def __init__(self, *, connection: psycopg.AsyncConnection[Any]) -> None:
+        self._connection = connection
+        self._pgconn = connection.pgconn
+
+    async def read(self) -> memoryview | None:
+        frame_or_result = await self._connection.wait(copy_from(self._pgconn))
+        if isinstance(frame_or_result, memoryview):
+            return frame_or_result
+        return None
+
+    async def write(self, payload: bytes) -> None:
+        await self._connection.wait(copy_to(self._pgconn, payload, flush=True))
+
+
 async def consume_replication_stream(
     *,
     settings: Settings,
@@ -53,15 +72,22 @@ async def consume_replication_stream(
                 start_lsn=ack_tracker.frontier_lsn,
                 wal2json_options_sql=settings.wal2json_options_sql,
             )
-
-            async with cursor.copy(statement) as copy:
-                await _replication_loop(
-                    copy=copy,
-                    settings=settings,
-                    queue=queue,
-                    ack_tracker=ack_tracker,
-                    frontier_updates=frontier_updates,
+            await cursor.execute(statement)
+            pgresult = cursor.pgresult
+            if pgresult is None or pgresult.status != pq.ExecStatus.COPY_BOTH:
+                raise RuntimeError(
+                    "START_REPLICATION did not enter COPY_BOTH mode "
+                    f"(status={pgresult.status if pgresult else 'none'})"
                 )
+
+            replication_stream = _ReplicationStream(connection=connection)
+            await _replication_loop(
+                copy=replication_stream,
+                settings=settings,
+                queue=queue,
+                ack_tracker=ack_tracker,
+                frontier_updates=frontier_updates,
+            )
     finally:
         await connection.close()
 
@@ -77,56 +103,64 @@ async def _replication_loop(
     latest_safe_lsn = ack_tracker.frontier_lsn
     last_feedback_lsn = latest_safe_lsn
     last_feedback_at = monotonic()
+    read_task: asyncio.Task[Any] = asyncio.create_task(copy.read(), name="replication_copy_read")
 
-    while True:
-        latest_safe_lsn = _drain_frontier_updates(frontier_updates, default=latest_safe_lsn)
-        if latest_safe_lsn > last_feedback_lsn:
-            await copy.write(build_standby_status(latest_safe_lsn, reply_requested=0))
-            last_feedback_lsn = latest_safe_lsn
-            last_feedback_at = monotonic()
-
-        elapsed = monotonic() - last_feedback_at
-        timeout = max(0.01, settings.replication_feedback_interval_s - elapsed)
-
-        try:
-            raw_frame = await asyncio.wait_for(copy.read(), timeout=timeout)
-        except asyncio.TimeoutError:
-            await copy.write(build_standby_status(latest_safe_lsn, reply_requested=0))
-            last_feedback_lsn = latest_safe_lsn
-            last_feedback_at = monotonic()
-            continue
-
-        if raw_frame is None:
-            continue
-
-        frame = bytes(raw_frame)
-        if not frame:
-            continue
-
-        tag = frame[:1]
-        if tag == b"w":
-            _, wal_end, _, payload = parse_xlogdata(frame)
-            partition_key = extract_partition_key(
-                payload,
-                lsn=wal_end,
-                mode=settings.partition_key_mode,
-                fallback=settings.partition_key_fallback,
-                static_fallback_value=settings.partition_key_static_value,
-            )
-            ack_tracker.register(wal_end)
-            await queue.put(ChangeEvent(lsn=wal_end, payload=payload, partition_key=partition_key))
-            continue
-
-        if tag == b"k":
-            _, _, reply_requested = parse_keepalive(frame)
-            if reply_requested:
-                latest_safe_lsn = _drain_frontier_updates(frontier_updates, default=latest_safe_lsn)
-                await copy.write(build_standby_status(latest_safe_lsn, reply_requested=1))
+    try:
+        while True:
+            latest_safe_lsn = _drain_frontier_updates(frontier_updates, default=latest_safe_lsn)
+            if latest_safe_lsn > last_feedback_lsn:
+                await copy.write(build_standby_status(latest_safe_lsn, reply_requested=0))
                 last_feedback_lsn = latest_safe_lsn
                 last_feedback_at = monotonic()
-            continue
 
-        raise ReplicationProtocolError(f"Unknown replication frame tag: {tag!r}")
+            elapsed = monotonic() - last_feedback_at
+            timeout = max(0.01, settings.replication_feedback_interval_s - elapsed)
+            done, _ = await asyncio.wait({read_task}, timeout=timeout)
+
+            if not done:
+                await copy.write(build_standby_status(latest_safe_lsn, reply_requested=0))
+                last_feedback_lsn = latest_safe_lsn
+                last_feedback_at = monotonic()
+                continue
+
+            raw_frame = read_task.result()
+            read_task = asyncio.create_task(copy.read(), name="replication_copy_read")
+
+            if raw_frame is None:
+                continue
+
+            frame = bytes(raw_frame)
+            if not frame:
+                continue
+
+            tag = frame[:1]
+            if tag == b"w":
+                _, wal_end, _, payload = parse_xlogdata(frame)
+                partition_key = extract_partition_key(
+                    payload,
+                    lsn=wal_end,
+                    mode=settings.partition_key_mode,
+                    fallback=settings.partition_key_fallback,
+                    static_fallback_value=settings.partition_key_static_value,
+                )
+                ack_tracker.register(wal_end)
+                await queue.put(ChangeEvent(lsn=wal_end, payload=payload, partition_key=partition_key))
+                continue
+
+            if tag == b"k":
+                _, _, reply_requested = parse_keepalive(frame)
+                if reply_requested:
+                    latest_safe_lsn = _drain_frontier_updates(frontier_updates, default=latest_safe_lsn)
+                    await copy.write(build_standby_status(latest_safe_lsn, reply_requested=1))
+                    last_feedback_lsn = latest_safe_lsn
+                    last_feedback_at = monotonic()
+                continue
+
+            raise ReplicationProtocolError(f"Unknown replication frame tag: {tag!r}")
+    finally:
+        if not read_task.done():
+            read_task.cancel()
+        await asyncio.gather(read_task, return_exceptions=True)
 
 
 def _drain_frontier_updates(frontier_updates: asyncio.Queue[int], *, default: int) -> int:

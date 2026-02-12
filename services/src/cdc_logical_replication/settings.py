@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     output_plugin: Literal["wal2json"] = Field(default="wal2json", alias="OUTPUT_PLUGIN")
     connect_timeout_s: int = Field(default=5, alias="CONNECT_TIMEOUT_S")
 
-    wal2json_format_version: int = Field(default=2, alias="WAL2JSON_FORMAT_VERSION")
+    wal2json_format_version: Literal[2] = Field(default=2, alias="WAL2JSON_FORMAT_VERSION")
     wal2json_include_timestamp: bool = Field(default=True, alias="WAL2JSON_INCLUDE_TIMESTAMP")
     wal2json_include_lsn: bool = Field(default=True, alias="WAL2JSON_INCLUDE_LSN")
     wal2json_include_transactions: bool = Field(
