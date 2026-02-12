@@ -6,10 +6,10 @@ import random
 from collections.abc import Sequence
 from typing import Any, Protocol
 
-from cdc_logical_replication.ack import AckTracker
-from cdc_logical_replication.batching import MicroBatcher
-from cdc_logical_replication.models import ChangeEvent
-from cdc_logical_replication.queue import InflightEventQueue
+from src.cdc_logical_replication.ack import AckTracker
+from src.cdc_logical_replication.batching import MicroBatcher
+from src.cdc_logical_replication.models import ChangeEvent
+from src.cdc_logical_replication.queue import InflightEventQueue
 
 LOGGER = logging.getLogger(__name__)
 

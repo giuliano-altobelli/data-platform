@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import time
 
-from cdc_logical_replication.batching import MicroBatcher
-from cdc_logical_replication.models import ChangeEvent
-from cdc_logical_replication.queue import InflightEventQueue
+from src.cdc_logical_replication.batching import MicroBatcher
+from src.cdc_logical_replication.models import ChangeEvent
+from src.cdc_logical_replication.queue import InflightEventQueue
 
 
 def _event(lsn: int, payload_size: int) -> ChangeEvent:
