@@ -175,3 +175,53 @@ Tests assume AWS creds already available via env vars.
 - AWS account has default VPC (or implementer documents `vpc_id`/`subnet_ids` path).
 - RDS supports `wal2json` plugin for the chosen engine version.
 - Public dev RDS with IP allowlist is acceptable for this developer-only workflow.
+
+## Preflight
+Use this preflight before starting the service with an old slot.
+
+1. Confirm slot exists, is inactive, and uses wal2json:
+
+SELECT slot_name, plugin, slot_type, active, restart_lsn, confirmed_flush_lsn
+FROM pg_replication_slots
+WHERE slot_name = 'your_slot_name';
+
+2. Estimate how much backlog is pending for replay:
+
+SELECT
+  slot_name,
+  pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) AS retained_wal,
+  pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS unflushed_gap
+FROM pg_replication_slots
+WHERE slot_name = 'your_slot_name';
+
+3. Check no other session is currently consuming the slot:
+
+SELECT pid, usename, application_name, client_addr, state, query
+FROM pg_stat_activity
+WHERE query ILIKE '%START_REPLICATION%'
+  AND query ILIKE '%your_slot_name%';
+
+4. Optional sanity check that wal2json decoding works on that slot (peek without consuming):
+
+SELECT lsn, data
+FROM pg_logical_slot_peek_changes(
+  'your_slot_name',
+  NULL,
+  5,
+  'format-version','2',
+  'include-lsn','1',
+  'include-timestamp','1',
+  'include-transaction','0',
+  'include-pk','1'
+);
+
+Then start service with:
+
+export REPLICATION_SLOT=your_slot_name
+export WAL2JSON_FORMAT_VERSION=2
+uv run cdc-logical-replication
+
+Notes:
+
+- peek does not advance the slot; get_changes does.
+- If active=true, stop the other consumer first.

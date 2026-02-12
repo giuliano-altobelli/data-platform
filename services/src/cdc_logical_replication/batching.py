@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from time import monotonic
 
-from src.cdc_logical_replication.models import ChangeEvent
-from src.cdc_logical_replication.queue import InflightEventQueue
+from cdc_logical_replication.models import ChangeEvent
+from cdc_logical_replication.queue import InflightEventQueue
 
 
 class MicroBatcher:

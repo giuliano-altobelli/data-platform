@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from src.cdc_logical_replication.models import ChangeEvent
+from cdc_logical_replication.models import ChangeEvent
 
 
 class InflightEventQueue:
