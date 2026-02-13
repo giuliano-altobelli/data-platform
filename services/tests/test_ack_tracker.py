@@ -48,6 +48,34 @@ def test_unknown_or_duplicate_publish_raises() -> None:
         tracker.mark_published(100)
 
 
+def test_duplicate_lsn_publish_count_must_match_registration_count() -> None:
+    tracker = AckTracker(initial_lsn=0)
+    tracker.register(100)
+    tracker.register(100)
+    tracker.register(100)
+
+    assert tracker.mark_published(100) == 100
+    assert tracker.mark_published(100) is None
+    assert tracker.mark_published(100) is None
+
+    with pytest.raises(KeyError):
+        tracker.mark_published(100)
+
+
+def test_large_inflight_reverse_publish_advances_frontier_only_when_contiguous() -> None:
+    tracker = AckTracker(initial_lsn=0)
+    max_lsn = 10_000
+    for lsn in range(1, max_lsn + 1):
+        tracker.register(lsn)
+
+    for lsn in range(max_lsn, 1, -1):
+        assert tracker.mark_published(lsn) is None
+        assert tracker.frontier_lsn == 0
+
+    assert tracker.mark_published(1) == max_lsn
+    assert tracker.frontier_lsn == max_lsn
+
+
 def test_register_requires_non_decreasing_lsn() -> None:
     tracker = AckTracker(initial_lsn=0)
     tracker.register(200)

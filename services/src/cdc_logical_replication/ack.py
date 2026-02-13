@@ -17,6 +17,7 @@ class AckTracker:
         self._frontier = initial_lsn
         self._last_registered = initial_lsn
         self._pending: deque[_PendingLsn] = deque()
+        self._pending_by_lsn: dict[int, deque[_PendingLsn]] = {}
 
     @property
     def frontier_lsn(self) -> int:
@@ -33,15 +34,18 @@ class AckTracker:
             )
 
         self._last_registered = lsn
-        self._pending.append(_PendingLsn(lsn=lsn))
+        pending = _PendingLsn(lsn=lsn)
+        self._pending.append(pending)
+        self._pending_by_lsn.setdefault(lsn, deque()).append(pending)
 
     def mark_published(self, lsn: int) -> int | None:
-        for pending in self._pending:
-            if pending.lsn == lsn and not pending.published:
-                pending.published = True
-                break
-        else:
+        bucket = self._pending_by_lsn.get(lsn)
+        if not bucket:
             raise KeyError(f"Unknown or already-published LSN: {lsn}")
+        pending = bucket.popleft()
+        pending.published = True
+        if not bucket:
+            del self._pending_by_lsn[lsn]
 
         advanced_to: int | None = None
         while self._pending and self._pending[0].published:
