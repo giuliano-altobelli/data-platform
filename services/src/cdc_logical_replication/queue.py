@@ -41,7 +41,12 @@ class InflightEventQueue:
             await self._bytes_lock.wait_for(lambda: self._bytes_inflight + size <= self._max_bytes)
             self._bytes_inflight += size
 
-        await self._queue.put(event)
+        try:
+            await self._queue.put(event)
+        except BaseException:
+            async with self._bytes_lock:
+                self._release_bytes(size)
+            raise
 
     async def get(self) -> ChangeEvent:
         return await self._queue.get()
@@ -49,10 +54,13 @@ class InflightEventQueue:
     async def task_done(self, event: ChangeEvent) -> None:
         self._queue.task_done()
         async with self._bytes_lock:
-            self._bytes_inflight -= event.record_size_bytes
-            if self._bytes_inflight < 0:
-                self._bytes_inflight = 0
-            self._bytes_lock.notify_all()
+            self._release_bytes(event.record_size_bytes)
 
     async def join(self) -> None:
         await self._queue.join()
+
+    def _release_bytes(self, size: int) -> None:
+        self._bytes_inflight -= size
+        if self._bytes_inflight < 0:
+            self._bytes_inflight = 0
+        self._bytes_lock.notify_all()
