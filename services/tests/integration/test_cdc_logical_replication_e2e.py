@@ -273,8 +273,8 @@ async def _publish_events_to_kinesis(
     frontier_updates: asyncio.Queue[int] = asyncio.Queue()
 
     for event in events:
-        ack_tracker.register(event.lsn)
-        await queue.put(event)
+        ack_id = ack_tracker.register(event.lsn)
+        await queue.put(event.model_copy(update={"ack_id": ack_id}))
 
     publisher = KinesisPublisher(
         client=kinesis_client,

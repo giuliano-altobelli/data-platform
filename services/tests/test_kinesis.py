@@ -44,12 +44,15 @@ async def _prepare_batch(
     queue = InflightEventQueue(max_messages=100, max_bytes=1_000_000)
     ack_tracker = AckTracker(initial_lsn=0)
     frontier_updates: asyncio.Queue[int] = asyncio.Queue()
+    prepared_events: list[ChangeEvent] = []
 
     for event in events:
-        ack_tracker.register(event.lsn)
-        await queue.put(event)
+        ack_id = ack_tracker.register(event.lsn)
+        prepared_event = event.model_copy(update={"ack_id": ack_id})
+        prepared_events.append(prepared_event)
+        await queue.put(prepared_event)
 
-    batch = [await queue.get() for _ in events]
+    batch = [await queue.get() for _ in prepared_events]
     return batch, queue, ack_tracker, frontier_updates
 
 
@@ -186,6 +189,61 @@ def test_non_retriable_record_error_is_dropped_without_retry(
         assert not sleep_calls
         assert ack_tracker.pending_count == 0
         assert ack_tracker.frontier_lsn == 20
+        assert queue.bytes_inflight == 0
+        assert frontier_updates.qsize() >= 1
+
+    asyncio.run(scenario())
+
+
+def test_duplicate_lsn_mixed_result_retries_failed_record_without_losing_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        sleep_calls: list[float] = []
+
+        async def fake_sleep(delay: float) -> None:
+            sleep_calls.append(delay)
+
+        monkeypatch.setattr("src.cdc_logical_replication.kinesis.asyncio.sleep", fake_sleep)
+
+        events = [_event(100, b"a"), _event(100, b"b")]
+        batch, queue, ack_tracker, frontier_updates = await _prepare_batch(events)
+        client = _StubKinesisClient(
+            [
+                {
+                    "Records": [
+                        {
+                            "ErrorCode": "ProvisionedThroughputExceededException",
+                            "ErrorMessage": "throttled",
+                        },
+                        {},
+                    ]
+                },
+                {"Records": [{}]},
+            ]
+        )
+        publisher = KinesisPublisher(
+            client=client,
+            stream_name="stream",
+            max_records=100,
+            max_bytes=1_000_000,
+            max_delay_ms=10,
+            retry_base_delay_ms=1,
+            retry_max_delay_ms=5,
+            retry_max_attempts=3,
+        )
+
+        await publisher._publish_with_retries(
+            batch=batch,
+            queue=queue,
+            ack_tracker=ack_tracker,
+            frontier_updates=frontier_updates,
+        )
+
+        assert client.calls == 2
+        assert len(sleep_calls) == 1
+        assert ack_tracker.pending_count == 0
+        assert ack_tracker.frontier_lsn == 100
         assert queue.bytes_inflight == 0
         assert frontier_updates.qsize() >= 1
 

@@ -143,8 +143,15 @@ async def _replication_loop(
                     fallback=settings.partition_key_fallback,
                     static_fallback_value=settings.partition_key_static_value,
                 )
-                ack_tracker.register(wal_end)
-                await queue.put(ChangeEvent(lsn=wal_end, payload=payload, partition_key=partition_key))
+                ack_id = ack_tracker.register(wal_end)
+                await queue.put(
+                    ChangeEvent(
+                        lsn=wal_end,
+                        ack_id=ack_id,
+                        payload=payload,
+                        partition_key=partition_key,
+                    )
+                )
                 continue
 
             if tag == b"k":

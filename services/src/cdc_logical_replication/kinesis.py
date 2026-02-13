@@ -181,7 +181,7 @@ class KinesisPublisher:
                         failed_retriable.append(event)
                     continue
 
-                advanced_to = ack_tracker.mark_published(event.lsn)
+                advanced_to = self._mark_event_published(event=event, ack_tracker=ack_tracker)
                 if advanced_to is not None:
                     frontier_updates.put_nowait(advanced_to)
                 await queue.task_done(event)
@@ -256,10 +256,18 @@ class KinesisPublisher:
 
         # TODO: publish dropped records to a durable DLQ/quarantine stream before acking.
         for event in events:
-            advanced_to = ack_tracker.mark_published(event.lsn)
+            advanced_to = self._mark_event_published(event=event, ack_tracker=ack_tracker)
             if advanced_to is not None:
                 frontier_updates.put_nowait(advanced_to)
             await queue.task_done(event)
+
+    def _mark_event_published(self, *, event: ChangeEvent, ack_tracker: AckTracker) -> int | None:
+        if event.ack_id is None:
+            raise RuntimeError(
+                "ChangeEvent.ack_id is required for publish acknowledgements; "
+                f"missing for LSN {event.lsn}"
+            )
+        return ack_tracker.mark_published_by_id(event.ack_id)
 
     async def _put_records(self, events: Sequence[ChangeEvent]) -> dict[str, Any]:
         payload = [{"Data": e.payload, "PartitionKey": e.partition_key} for e in events]

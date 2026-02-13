@@ -83,12 +83,15 @@ async def _prepare_batch(
     queue = InflightEventQueue(max_messages=32, max_bytes=1_000_000)
     ack_tracker = AckTracker(initial_lsn=0)
     frontier_updates: asyncio.Queue[int] = asyncio.Queue()
+    prepared_events: list[ChangeEvent] = []
 
     for event in events:
-        ack_tracker.register(event.lsn)
-        await queue.put(event)
+        ack_id = ack_tracker.register(event.lsn)
+        prepared_event = event.model_copy(update={"ack_id": ack_id})
+        prepared_events.append(prepared_event)
+        await queue.put(prepared_event)
 
-    batch = [await queue.get() for _ in events]
+    batch = [await queue.get() for _ in prepared_events]
     return batch, queue, ack_tracker, frontier_updates
 
 
