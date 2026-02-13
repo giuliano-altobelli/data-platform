@@ -246,3 +246,23 @@ FROM python:3.12-slim AS base
  - Config comes from env vars (PG*, AWS_REGION, KINESIS_STREAM, optional REPLICATION_SLOT).
  - Uses IRSA in EKS for AWS auth (no static creds in image).
  If you want, I can draft the exact production-ready Dockerfile + .dockerignore for this repo layout (including locked deps via uv.lock).
+
+
+## Infra
+# 1) Provision infra
+  cd services/infra/stacks/cdc_logical_replication_dev
+  terraform init
+  terraform apply
+
+# 2) Export env required by integration test
+  eval "$(terraform output -json env_exports | jq -r 'to_entries[] | "export \(.key)=\(.value|@sh)"')"
+  export PGPASSWORD="$(terraform output -raw pg_master_password)"
+  export RUN_INTEGRATION_TESTS=1
+
+# 3) Run integration test (from services/)
+cd ../../../
+uv run pytest -q tests/integration/test_cdc_logical_replication_e2e.py -m integration
+
+# 4) Tear down when done (optional)
+cd infra/stacks/cdc_logical_replication_dev
+terraform destroy
