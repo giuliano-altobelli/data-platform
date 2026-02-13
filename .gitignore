@@ -211,3 +211,4 @@ services/infra/**/.terraform/
 services/infra/**/terraform.tfstate*
 services/infra/**/.terraform.lock.hcl
 services/infra/**/*.tfvars
+services/infra/**/*.info

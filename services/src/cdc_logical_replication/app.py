@@ -82,6 +82,7 @@ async def _run_leader_pipeline(*, settings: Settings, leader_session: LeaderSess
         max_delay_ms=settings.kinesis_batch_max_delay_ms,
         retry_base_delay_ms=settings.kinesis_retry_base_delay_ms,
         retry_max_delay_ms=settings.kinesis_retry_max_delay_ms,
+        retry_max_attempts=settings.kinesis_retry_max_attempts,
     )
 
     stop_event = asyncio.Event()

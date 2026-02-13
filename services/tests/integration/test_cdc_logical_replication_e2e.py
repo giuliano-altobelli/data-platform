@@ -284,6 +284,7 @@ async def _publish_events_to_kinesis(
         max_delay_ms=25,
         retry_base_delay_ms=settings.kinesis_retry_base_delay_ms,
         retry_max_delay_ms=settings.kinesis_retry_max_delay_ms,
+        retry_max_attempts=settings.kinesis_retry_max_attempts,
     )
 
     publisher_task = asyncio.create_task(
