@@ -1,10 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import psycopg
 from pydantic import BaseModel, ConfigDict
+
+LOGGER = logging.getLogger(__name__)
+
+_SESSION_HOLDS_LOCK_SQL = """
+SELECT EXISTS(
+    SELECT 1
+    FROM pg_locks
+    WHERE locktype = 'advisory'
+      AND pid = pg_backend_pid()
+      AND granted
+      AND classid = %s::oid
+      AND objid = %s::oid
+      AND objsubid = 1
+)
+"""
 
 
 class LeaderSession(BaseModel):
@@ -55,6 +71,22 @@ async def leadership_watchdog(
 ) -> None:
     while not stop_event.is_set():
         await asyncio.sleep(interval_s)
-        async with session.connection.cursor() as cursor:
-            await cursor.execute("SELECT 1")
-            _ = await cursor.fetchone()
+        holds_lock = await _session_holds_lock(session)
+        if not holds_lock:
+            LOGGER.error("leadership_lost", extra={"leader_lock_key": session.lock_key})
+            raise RuntimeError("leader_lock_lost")
+
+
+def _split_bigint_advisory_lock_key(lock_key: int) -> tuple[int, int]:
+    normalized = lock_key & 0xFFFFFFFFFFFFFFFF
+    high_32 = (normalized >> 32) & 0xFFFFFFFF
+    low_32 = normalized & 0xFFFFFFFF
+    return high_32, low_32
+
+
+async def _session_holds_lock(session: LeaderSession) -> bool:
+    classid, objid = _split_bigint_advisory_lock_key(session.lock_key)
+    async with session.connection.cursor() as cursor:
+        await cursor.execute(_SESSION_HOLDS_LOCK_SQL, (classid, objid))
+        row = await cursor.fetchone()
+    return bool(row and row[0] is True)

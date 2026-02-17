@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     )
     kinesis_retry_base_delay_ms: int = Field(default=100, alias="KINESIS_RETRY_BASE_DELAY_MS")
     kinesis_retry_max_delay_ms: int = Field(default=5000, alias="KINESIS_RETRY_MAX_DELAY_MS")
+    kinesis_retry_max_attempts: int = Field(default=3, alias="KINESIS_RETRY_MAX_ATTEMPTS")
 
     @field_validator("replication_slot")
     @classmethod
@@ -109,6 +110,13 @@ class Settings(BaseSettings):
     def _validate_batch_delay(cls, value: int) -> int:
         if value < 1:
             raise ValueError("KINESIS_BATCH_MAX_DELAY_MS must be > 0")
+        return value
+
+    @field_validator("kinesis_retry_max_attempts")
+    @classmethod
+    def _validate_retry_attempts(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("KINESIS_RETRY_MAX_ATTEMPTS must be >= 1")
         return value
 
     @model_validator(mode="after")

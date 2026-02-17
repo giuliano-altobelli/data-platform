@@ -9,6 +9,7 @@ class ChangeEvent(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     lsn: int
+    ack_id: int | None = None
     payload: bytes
     partition_key: str
 

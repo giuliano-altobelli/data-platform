@@ -6,6 +6,8 @@ import time
 XLOGDATA_HDR = struct.Struct("!cqqq")
 KEEPALIVE = struct.Struct("!cqqB")
 STANDBY_STATUS = struct.Struct("!cqqqqB")
+POSTGRES_EPOCH_OFFSET_US = 946_684_800_000_000
+MICROSECONDS_PER_SECOND = 1_000_000
 
 
 class ReplicationProtocolError(RuntimeError):
@@ -13,7 +15,7 @@ class ReplicationProtocolError(RuntimeError):
 
 
 def now_us() -> int:
-    return int(time.time() * 1_000_000)
+    return int(time.time() * MICROSECONDS_PER_SECOND) - POSTGRES_EPOCH_OFFSET_US
 
 
 def parse_xlogdata(buf: bytes) -> tuple[int, int, int, bytes]:

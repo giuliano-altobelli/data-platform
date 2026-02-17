@@ -32,3 +32,13 @@ def test_wal2json_format_version_rejects_non_2(
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_kinesis_retry_max_attempts_must_be_positive(
+    _base_env: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KINESIS_RETRY_MAX_ATTEMPTS", "0")
+
+    with pytest.raises(ValidationError):
+        Settings()
