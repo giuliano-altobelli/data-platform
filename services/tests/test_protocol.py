@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from src.cdc_logical_replication import protocol
 from src.cdc_logical_replication.protocol import (
     KEEPALIVE,
     XLOGDATA_HDR,
     build_standby_status,
     lsn_int_to_str,
     lsn_str_to_int,
+    now_us,
     parse_keepalive,
     parse_xlogdata,
 )
@@ -45,3 +47,19 @@ def test_build_standby_status_uses_ack_lsn_for_all_progress_fields() -> None:
     assert int.from_bytes(packet[9:17], "big", signed=True) == 1234
     assert int.from_bytes(packet[17:25], "big", signed=True) == 1234
     assert packet[-1] == 1
+
+
+def test_now_us_uses_postgres_epoch_offset(monkeypatch) -> None:
+    monkeypatch.setattr(protocol.time, "time", lambda: 946_684_800.0)
+    assert now_us() == 0
+
+    monkeypatch.setattr(protocol.time, "time", lambda: 946_684_801.25)
+    assert now_us() == 1_250_000
+
+
+def test_build_standby_status_uses_postgres_epoch_timestamp(monkeypatch) -> None:
+    monkeypatch.setattr(protocol.time, "time", lambda: 946_684_801.25)
+
+    packet = build_standby_status(1234, reply_requested=0)
+
+    assert int.from_bytes(packet[25:33], "big", signed=True) == 1_250_000
